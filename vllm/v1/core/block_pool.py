@@ -126,7 +126,7 @@ class BlockHashToBlockMap:
             return None
         if isinstance(blocks, dict):
             # Try to pop block_id from the block dict, and if dict still
-            # contain blocks, put back to the cache.
+            # contains blocks, put back to the cache.
             block = blocks.pop(block_id, None)
             if len(blocks) > 0:
                 self._cache[key] = blocks
@@ -575,6 +575,11 @@ class BlockPool:
         """
         If a block is cached in `cached_block_hash_to_block`, we reset its hash
         metadata and evict it from the cache.
+
+        When the block's hash is not found in the cache (e.g. the cache entry
+        was already removed, or a different block with the same hash exists),
+        we still reset the block's hash because the block is about to be
+        reused for new content and its old hash would become stale.
 
         Args:
             block: The block to evict.
