@@ -8,7 +8,9 @@ from tests.tool_parsers.common_tests import (
     ToolParserTestConfig,
     ToolParserTests,
 )
+from tests.tool_parsers.utils import run_tool_extraction_streaming
 from vllm.tokenizers import TokenizerLike, get_tokenizer
+from vllm.tool_parsers.deepseekv3_tool_parser import DeepSeekV3ToolParser
 
 
 class TestDeepSeekV3ToolParser(ToolParserTests):
@@ -90,3 +92,21 @@ class TestDeepSeekV3ToolParser(ToolParserTests):
                 ),
             },
         )
+
+
+def test_streaming_complete_tool_call_single_delta():
+    tokenizer = get_tokenizer("deepseek-ai/DeepSeek-V3")
+    parser = DeepSeekV3ToolParser(tokenizer)
+    model_output = (
+        "<｜tool▁calls▁begin｜>"
+        "<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n"
+        '```json\n{"x": 42}\n```<｜tool▁call▁end｜>'
+        "<｜tool▁calls▁end｜>"
+    )
+
+    reconstructor = run_tool_extraction_streaming(parser, [model_output])
+
+    assert len(reconstructor.tool_calls) == 1
+    tool_call = reconstructor.tool_calls[0]
+    assert tool_call.function.name == "get_weather"
+    assert tool_call.function.arguments == '{"x": 42}'

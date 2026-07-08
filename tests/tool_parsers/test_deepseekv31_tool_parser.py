@@ -3,6 +3,7 @@
 
 import pytest
 
+from tests.tool_parsers.utils import run_tool_extraction_streaming
 from vllm.tokenizers import get_tokenizer
 from vllm.tool_parsers.deepseekv31_tool_parser import (
     DeepSeekV31ToolParser,
@@ -59,3 +60,18 @@ def test_extract_tool_calls_with_multiple_tools(parser):
 
     # prefix is content
     assert result.content == "some prefix text"
+
+
+def test_streaming_complete_tool_call_single_delta(parser):
+    model_output = (
+        "<｜tool▁calls▁begin｜>"
+        '<｜tool▁call▁begin｜>foo<｜tool▁sep｜>{"x":1}<｜tool▁call▁end｜>'
+        "<｜tool▁calls▁end｜>"
+    )
+
+    reconstructor = run_tool_extraction_streaming(parser, [model_output])
+
+    assert len(reconstructor.tool_calls) == 1
+    tool_call = reconstructor.tool_calls[0]
+    assert tool_call.function.name == "foo"
+    assert tool_call.function.arguments == '{"x":1}'

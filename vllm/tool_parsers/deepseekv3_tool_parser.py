@@ -152,6 +152,11 @@ class DeepSeekV3ToolParser(ToolParser):
                 self.tool_call_start_token_id
             )
             cur_tool_end_count = current_token_ids.count(self.tool_call_end_token_id)
+            complete_tool_call_in_delta = (
+                cur_tool_start_count == cur_tool_end_count
+                and cur_tool_start_count > prev_tool_start_count
+                and cur_tool_end_count > prev_tool_end_count
+            )
             tool_call_portion = None
             text_portion = None
 
@@ -179,8 +184,10 @@ class DeepSeekV3ToolParser(ToolParser):
             if (
                 cur_tool_start_count > cur_tool_end_count
                 and cur_tool_start_count > prev_tool_start_count
-            ):
-                if len(delta_token_ids) > 1:
+            ) or complete_tool_call_in_delta:
+                if complete_tool_call_in_delta and tool_call_portion is not None:
+                    pass
+                elif len(delta_token_ids) > 1:
                     tool_call_portion = current_text.split(self.tool_call_start_token)[
                         -1
                     ]
@@ -277,15 +284,24 @@ class DeepSeekV3ToolParser(ToolParser):
                 function_name: str | None = current_tool_call.get("name")
                 if function_name:
                     self.current_tool_name_sent = True
+                    function_call = DeltaFunctionCall(name=function_name)
+                    arguments = current_tool_call.get("arguments")
+                    if complete_tool_call_in_delta and arguments:
+                        function_call.arguments = arguments
+                        self.streamed_args_for_tool[self.current_tool_id] = arguments
+                        if len(self.prev_tool_call_arr) <= self.current_tool_id:
+                            self.prev_tool_call_arr.append(current_tool_call)
+                        else:
+                            self.prev_tool_call_arr[self.current_tool_id] = (
+                                current_tool_call
+                            )
                     return DeltaMessage(
                         tool_calls=[
                             DeltaToolCall(
                                 index=self.current_tool_id,
                                 type="function",
                                 id=make_tool_call_id(),
-                                function=DeltaFunctionCall(
-                                    name=function_name
-                                ).model_dump(exclude_none=True),
+                                function=function_call.model_dump(exclude_none=True),
                             )
                         ]
                     )
